@@ -1,0 +1,18 @@
+{
+  "id": "./payroll.html",
+  "name": "給与計算",
+  "short_name": "給与計算",
+  "description": "勤怠データから給与を計算（オフライン対応）",
+  "start_url": "./payroll.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f2e9",
+  "theme_color": "#16756e",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
