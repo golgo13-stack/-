@@ -328,6 +328,13 @@ function renderSettings(){
           <button class="btn solid" id="aSet">${adminPin()?'変更':'設定する'}</button></div>
       </div><p class="note">※忘れると設定・記録編集が開けなくなります。控えを残してください。</p>
     </div>
+    <div class="label">表示サイズ</div>
+    <div class="panel box" style="margin-bottom:28px">
+      <p>画面全体の大きさを調整できます。タブレットに合わせて見やすいサイズを選んでください。</p>
+      <div style="display:flex;gap:8px">
+        ${[['1','標準'],['2','大'],['2.5','特大']].map(([z,l])=>{const cur=String(state.settings.zoom??2)===z;return `<button class="btn zoomBtn ${cur?'solid':'ghost'}" data-z="${z}" style="flex:1;padding:10px">${l}</button>`;}).join('')}
+      </div>
+    </div>
     <div class="label">従業員（打刻PIN）</div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <input class="inp" id="newName" placeholder="氏名を入力" style="flex:1">
@@ -367,6 +374,7 @@ function renderSettings(){
   if(adminPin())$('#aLock').onclick=()=>{ui.adminUnlocked=false;renderView();};
   $('#aSet').onclick=()=>openPinModal({title:'管理者PIN',mode:'set',onSet:p=>{state.settings.adminPin=p;save();renderView();}});
   $('#otTh').onchange=e=>{const v=parseFloat(e.target.value);state.settings.otThreshold=(isNaN(v)||v<0)?8:v;save();};
+  document.querySelectorAll('.zoomBtn').forEach(b=>b.onclick=()=>{state.settings.zoom=parseFloat(b.dataset.z);save();applyZoom();renderView();});
   const add=()=>{const n=$('#newName').value.trim();if(!n)return;state.employees.push({id:uid(),name:n,active:true,pin:''});save();renderView();};
   $('#addEmp').onclick=add;$('#newName').onkeydown=e=>{if(e.key==='Enter')add();};
   document.querySelectorAll('.setPin').forEach(b=>b.onclick=()=>{const e=state.employees.find(x=>x.id===b.dataset.id);
@@ -458,7 +466,8 @@ function checkMonthlySend(){
 }
 
 /* ============ boot ============ */
-load();render();checkMonthlySend();
+function applyZoom(){document.body.style.zoom=String(state.settings.zoom??2);}
+load();applyZoom();render();checkMonthlySend();
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }

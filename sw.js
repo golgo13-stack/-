@@ -1,4 +1,4 @@
-const CACHE = 'timecard-v11';
+const CACHE = 'timecard-v13';
 const ASSETS = [
   './',
   './index.html',
