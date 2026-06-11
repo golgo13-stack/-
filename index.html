@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#16756e" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="勤怠打刻" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<title>勤怠打刻</title>
+<style>
+  :root{
+    --bg:#f6f2e9; --panel:#fffdf8; --ink:#26302f; --sub:#7c8784; --line:#e3ddd0;
+    --teal:#16756e; --tealDk:#0e5a54; --green:#3f8f5b; --amber:#c9802b; --red:#b14b42;
+    --shadow:0 1px 2px rgba(38,48,47,.06),0 8px 24px rgba(38,48,47,.06);
+    --jp:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI','Yu Gothic','Noto Sans JP',sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--jp);
+    -webkit-user-select:none;user-select:none;font-variant-numeric:tabular-nums}
+  .wrap{max-width:760px;margin:0 auto;padding:0 16px 64px}
+  button{font-family:var(--jp);cursor:pointer;border:none;background:none;color:inherit}
+  input,select{font-family:var(--jp);font-size:16px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;padding:24px 0 16px}
+  .brand{font-size:11px;font-weight:800;letter-spacing:.15em;color:var(--teal)}
+  .brandTitle{font-size:18px;font-weight:800}
+  .hdate{font-size:12px;color:var(--sub);text-align:right}
+  .clock{font-size:26px;font-weight:800;color:var(--tealDk);text-align:right}
+  .tabs{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--panel);
+    border:1px solid var(--line);box-shadow:var(--shadow);margin-bottom:20px}
+  .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0;
+    border-radius:8px;font-size:14px;font-weight:800;color:var(--sub)}
+  .tab.active{background:var(--teal);color:#fff}
+  .tab svg{width:16px;height:16px}
+  .label{font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.05em;margin-bottom:8px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(min-width:520px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .empCard{border-radius:16px;padding:16px;text-align:left;background:var(--panel);
+    border:1px solid var(--line);box-shadow:var(--shadow)}
+  .empCard:active{transform:scale(.97)}
+  .empName{font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .pill{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;margin-top:6px}
+  .pill.out{background:#eee9dd;color:var(--sub)} .pill.working{background:var(--green);color:#fff}
+  .pill.break{background:var(--amber);color:#fff}
+  .back{display:inline-flex;align-items:center;gap:4px;font-size:14px;color:var(--sub);margin-bottom:12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+  .detail{padding:24px;text-align:center;margin-bottom:16px}
+  .detail .name{font-size:20px;font-weight:800;margin-bottom:4px}
+  .stats{margin-top:16px;display:flex;justify-content:center;gap:24px;font-size:14px;color:var(--sub)}
+  .stats b{color:var(--ink)} .stats b.w{color:var(--tealDk)}
+  .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .big{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    padding:28px 0;border-radius:16px;font-weight:800;font-size:18px;color:#fff;box-shadow:var(--shadow)}
+  .big:active{transform:scale(.97)} .big.full{grid-column:span 2}
+  .big svg{width:26px;height:26px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:800;
+    border-radius:10px;padding:8px 14px;font-size:14px}
+  .btn.solid{background:var(--teal);color:#fff} .btn.dk{background:var(--tealDk);color:#fff}
+  .btn.ghost{border:1px solid var(--tealDk);color:var(--tealDk)}
+  .btn svg{width:15px;height:15px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  .tableWrap{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  thead tr{background:#efe9db;color:var(--sub);font-size:12px}
+  th,td{padding:8px;text-align:center}
+  th:first-child,td:first-child{text-align:left;padding-left:12px}
+  tbody tr{background:var(--panel);border-top:1px solid var(--line)}
+  td.w{font-weight:800;color:var(--tealDk)} .muteRow{color:var(--sub);text-align:center;padding:32px 0}
+  .monthNav{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px}
+  .navBtn{padding:6px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex}
+  .monthTxt{font-size:18px;font-weight:800}
+  .rowBtw{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .box{padding:16px} .box p{font-size:13px;color:var(--sub);margin:0 0 12px}
+  .empRow{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+    background:var(--panel);border-top:1px solid var(--line)}
+  .tag{font-size:11px;padding:2px 8px;border-radius:999px}
+  .tag.on{background:#e7f1ea;color:var(--green)} .tag.off{background:#f1ece0;color:var(--sub)}
+  .field{margin-bottom:12px} .field>div{font-size:12px;font-weight:800;color:var(--sub);margin-bottom:4px}
+  .inp{width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);outline:none}
+  .warnBox{border-radius:12px;padding:10px 16px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:8px;
+    background:#fbf3e3;color:var(--amber);border:1px solid var(--line)}
+  .note{font-size:12px;color:var(--sub);margin-top:12px}
+  .empty{border-radius:16px;padding:40px;text-align:center;font-size:14px;background:var(--panel);border:1px solid var(--line);color:var(--sub)}
+  /* modal */
+  .overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    padding:16px;background:rgba(38,48,47,.4)}
+  .modal{width:100%;max-width:360px;background:var(--panel);border-radius:16px;padding:20px}
+  .modal .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .modal .mt{font-size:18px;font-weight:800}
+  .x{color:var(--sub);display:flex}
+  /* pin */
+  .pinTitle{font-size:18px;font-weight:800;text-align:center}
+  .pinSub{font-size:12px;color:var(--sub);text-align:center;margin-top:2px}
+  .dots{display:flex;justify-content:center;gap:12px;margin:20px 0}
+  .dot{width:16px;height:16px;border-radius:999px;background:var(--line)}
+  .dot.on{background:var(--tealDk)}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:280px;margin:0 auto}
+  .key{padding:16px 0;border-radius:12px;font-size:20px;font-weight:800;background:var(--panel);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .key:active{transform:scale(.96)} .key.fn{color:var(--sub)} .key.blank{border:none;background:none}
+  .pinErr{height:20px;margin-top:8px;text-align:center;font-size:14px;font-weight:800;color:var(--red)}
+  .pinCard{padding:24px;text-align:center}
+  .center{display:flex;justify-content:center}
+  .flash{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:12px 20px;border-radius:999px;
+    font-weight:800;font-size:14px;background:var(--tealDk);color:#fff;box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;z-index:60}
+  .hidden{display:none}
+  .verTag{position:fixed;right:10px;bottom:8px;font-size:10px;color:var(--sub);opacity:.65;
+    letter-spacing:.04em;pointer-events:none;line-height:1.5;text-align:right;z-index:5}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+/* ============ icons (inline svg) ============ */
+const ic = {
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  login:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>',
+  logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
+  coffee:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/><line x1="6" y1="2" x2="6" y2="5"/><line x1="10" y1="2" x2="10" y2="5"/><line x1="14" y1="2" x2="14" y2="5"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
+  left:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  right:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  pencil:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  key:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/></svg>',
+  del:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M18 9l-6 6M12 9l6 6"/></svg>',
+  shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',
+  dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>'
+};
+
+/* ============ helpers ============ */
+const $=(s,r=document)=>r.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const dateStr=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayStr=()=>dateStr(new Date());
+const monthOf=ds=>ds.slice(0,7);
+const fmtClock=ms=>{if(ms==null)return'--:--';const d=new Date(ms);return `${pad(d.getHours())}:${pad(d.getMinutes())}`;};
+const fmtDur=ms=>{if(ms==null||ms<0)ms=0;const m=Math.floor(ms/60000);return `${Math.floor(m/60)}:${pad(m%60)}`;};
+const fmtDurJp=ms=>{if(ms==null||ms<0)ms=0;const m=Math.floor(ms/60000);return `${Math.floor(m/60)}時間${pad(m%60)}分`;};
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
+const combine=(ds,hm)=>{if(!hm)return null;const[y,mo,d]=ds.split('-').map(Number);const[h,mi]=hm.split(':').map(Number);return new Date(y,mo-1,d,h,mi,0,0).getTime();};
+const toTimeInput=ms=>ms==null?'':`${pad(new Date(ms).getHours())}:${pad(new Date(ms).getMinutes())}`;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function workedMs(r,now){const end=r.clockOut??now;let b=r.breakMs||0;if(r.breakStart)b+=now-r.breakStart;return Math.max(0,end-r.clockIn-b);}
+function breakTotal(r,now){let b=r.breakMs||0;if(r.breakStart)b+=now-r.breakStart;return b;}
+const otHours=()=>state.settings.otThreshold??8;
+function overtimeMs(r,now){return Math.max(0,workedMs(r,now)-otHours()*3600000);}
+
+/* ============ state ============ */
+const KEY='timecard-data';
+let state={employees:[],records:[],settings:{adminPin:''}};
+let ui={tab:'punch',sel:null,verified:false,recMonth:monthOf(todayStr()),sumMonth:monthOf(todayStr()),adminUnlocked:false};
+function load(){try{const raw=localStorage.getItem(KEY);if(raw){const o=JSON.parse(raw);state={employees:o.employees||[],records:o.records||[],settings:o.settings||{adminPin:''}};}}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){alert('保存に失敗しました。ストレージの空き容量をご確認ください。');}}
+const adminPin=()=>state.settings.adminPin||'';
+const statusOf=id=>{const o=state.records.find(r=>r.employeeId===id&&r.clockOut==null);if(!o)return{status:'out',rec:null};if(o.breakStart)return{status:'break',rec:o};return{status:'working',rec:o};};
+
+/* ============ render shell ============ */
+const app=$('#app');
+let clockTimer=null;
+function render(){
+  app.innerHTML=`<div class="wrap">${headHTML()}${tabsHTML()}<div id="view"></div></div>`;
+  $('#view');
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ui.tab=t.dataset.k;render();});
+  renderView();
+  startClock();
+}
+function headHTML(){
+  const d=new Date();const wd=['日','月','火','水','木','金','土'][d.getDay()];
+  return `<div class="head">
+    <div><div class="brand">TIME CARD</div><div class="brandTitle">勤怠打刻</div></div>
+    <div><div class="hdate">${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wd}）</div>
+      <div class="clock" id="clock">${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}</div></div>
+  </div>`;
+}
+function startClock(){
+  if(clockTimer)clearInterval(clockTimer);
+  clockTimer=setInterval(()=>{const el=$('#clock');if(!el)return;const d=new Date();el.textContent=`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;},1000);
+}
+function tabsHTML(){
+  const items=[['punch','打刻',ic.clock],['records','記録',ic.file],['summary','集計',ic.users],['settings','設定',ic.gear]];
+  return `<div class="tabs">${items.map(([k,l,i])=>`<div class="tab ${ui.tab===k?'active':''}" data-k="${k}">${i}${l}</div>`).join('')}</div>`;
+}
+function renderView(){
+  const old=$('.verTag');if(old)old.remove();
+  if(ui.tab==='punch'){const t=document.createElement('div');t.className='verTag';t.textContent='M system ver2.864';document.body.appendChild(t);}
+  if(ui.tab==='punch')renderPunch();
+  else if(ui.tab==='records')renderRecords();
+  else if(ui.tab==='summary')renderSummary();
+  else renderSettings();
+}
+
+/* ============ PUNCH ============ */
+function pillHTML(s,center){const m={out:['out','退勤中'],working:['working','勤務中'],break:['break','休憩中']}[s];
+  return `<div style="${center?'display:flex;justify-content:center;margin-top:4px':'margin-top:6px'}"><span class="pill ${m[0]}">${m[1]}</span></div>`;}
+function renderPunch(){
+  const v=$('#view');
+  if(state.employees.length===0){v.innerHTML=`<div class="empty">まず「設定」タブで従業員を登録してください。</div>`;return;}
+  const emp=state.employees.find(e=>e.id===ui.sel);
+  if(!emp){
+    v.innerHTML=`<div class="label">打刻する人を選んでください</div><div class="grid" id="empGrid">
+      ${state.employees.filter(e=>e.active!==false).map(e=>{const st=statusOf(e.id).status;
+        return `<button class="empCard" data-id="${e.id}"><div class="empName">${esc(e.name)} ${e.pin?'<span style="color:var(--sub);display:inline-flex">'+ic.lock+'</span>':''}</div>${pillHTML(st)}</button>`;}).join('')}
+    </div>`;
+    document.querySelectorAll('#empGrid .empCard').forEach(b=>b.onclick=()=>{ui.sel=b.dataset.id;ui.verified=false;renderView();});
+    return;
+  }
+  if(emp.pin&&!ui.verified){
+    v.innerHTML=`<div class="back" id="bk">${ic.left}人を選び直す</div><div class="panel pinCard" id="pinHost"></div>`;
+    $('#bk').onclick=()=>{ui.sel=null;ui.verified=false;renderView();};
+    mountPin($('#pinHost'),{title:`${esc(emp.name)} さんのPIN`,sub:'4桁の打刻PINを入力',mode:'verify',correct:emp.pin,
+      onOk:()=>{ui.verified=true;renderView();}});
+    return;
+  }
+  const {status,rec}=statusOf(emp.id),now=Date.now();
+  const done=msg=>{showFlash(`${emp.name}さん ${msg}`);ui.sel=null;ui.verified=false;render();};
+  v.innerHTML=`<div class="back" id="bk">${ic.left}人を選び直す</div>
+    <div class="panel detail"><div class="name">${esc(emp.name)}</div>${pillHTML(status,true)}
+    ${rec?`<div class="stats"><div>出勤 <b>${fmtClock(rec.clockIn)}</b></div><div>休憩 <b>${Math.floor(breakTotal(rec,now)/60000)}分</b></div><div>実働 <b class="w">${fmtDur(workedMs(rec,now))}</b></div></div>`:''}</div>
+    <div class="actions" id="acts"></div>`;
+  $('#bk').onclick=()=>{ui.sel=null;ui.verified=false;renderView();};
+  const acts=$('#acts');
+  const mk=(cls,color,svg,txt,fn)=>{const b=document.createElement('button');b.className='big '+cls;b.style.background=color;b.innerHTML=svg+'<span>'+txt+'</span>';b.onclick=fn;return b;};
+  if(status==='out')acts.appendChild(mk('full','var(--green)',ic.login,'出勤',()=>{
+    state.records.push({id:uid(),employeeId:emp.id,date:todayStr(),clockIn:Date.now(),clockOut:null,breakMs:0,breakStart:null});save();done('出勤 '+fmtClock(Date.now()));}));
+  if(status==='working'){
+    acts.appendChild(mk('','var(--amber)',ic.coffee,'休憩に入る',()=>{rec.breakStart=Date.now();save();done('休憩開始');}));
+    acts.appendChild(mk('','var(--red)',ic.logout,'退勤',()=>{rec.clockOut=Date.now();save();done('退勤 '+fmtClock(Date.now()));}));
+  }
+  if(status==='break'){
+    acts.appendChild(mk('','var(--teal)',ic.play,'休憩から戻る',()=>{rec.breakMs=(rec.breakMs||0)+(Date.now()-rec.breakStart);rec.breakStart=null;save();done('休憩終了');}));
+    acts.appendChild(mk('','var(--red)',ic.logout,'退勤',()=>{const ex=rec.breakStart?Date.now()-rec.breakStart:0;rec.breakMs=(rec.breakMs||0)+ex;rec.breakStart=null;rec.clockOut=Date.now();save();done('退勤 '+fmtClock(Date.now()));}));
+  }
+}
+
+/* ============ RECORDS ============ */
+function shiftMonth(which,n){const key=which==='rec'?'recMonth':'sumMonth';const[y,m]=ui[key].split('-').map(Number);const d=new Date(y,m-1+n,1);ui[key]=`${d.getFullYear()}-${pad(d.getMonth()+1)}`;renderView();}
+function monthNavHTML(which){const[y,m]=ui[which==='rec'?'recMonth':'sumMonth'].split('-');
+  return `<div class="monthNav"><button class="navBtn" data-mn="-1">${ic.left}</button><div class="monthTxt">${y}年${Number(m)}月</div><button class="navBtn" data-mn="1">${ic.right}</button></div>`;}
+function bindMonthNav(which){document.querySelectorAll('.navBtn').forEach(b=>b.onclick=()=>shiftMonth(which,Number(b.dataset.mn)));}
+function empName(id){return state.employees.find(e=>e.id===id)?.name||'（削除済）';}
+function guardAdmin(fn){if(adminPin()&&!ui.adminUnlocked){openPinModal({title:'管理者PIN',sub:'編集には管理者の解除が必要です',mode:'verify',correct:adminPin(),onOk:()=>{ui.adminUnlocked=true;fn();}});}else fn();}
+function renderRecords(){
+  const v=$('#view'),now=Date.now();const locked=adminPin()&&!ui.adminUnlocked;
+  const rows=state.records.filter(r=>monthOf(r.date)===ui.recMonth).sort((a,b)=>(b.clockIn||0)-(a.clockIn||0));
+  v.innerHTML=monthNavHTML('rec')
+    +(!adminPin()?`<div class="warnBox">${ic.shield} 管理者PIN未設定。設定タブで登録すると編集をロックできます。</div>`:'')
+    +`<div class="rowBtw"><div class="label" style="margin:0">打刻記録（${rows.length}件）${locked?' ・閲覧のみ':''}</div>
+      <button class="btn solid" id="addRec">${locked?ic.lock:ic.plus}手動で追加</button></div>
+      <div class="tableWrap"><table><thead><tr><th>日付</th><th>氏名</th><th>出勤</th><th>退勤</th><th>休憩</th><th>実働</th><th></th></tr></thead>
+      <tbody>${rows.length===0?`<tr><td colspan="7" class="muteRow">記録がありません</td></tr>`:rows.map(r=>`<tr>
+        <td>${r.date.slice(5).replace('-','/')}</td><td style="text-align:left;max-width:6rem;overflow:hidden;text-overflow:ellipsis">${esc(empName(r.employeeId))}</td>
+        <td>${fmtClock(r.clockIn)}</td><td>${r.clockOut?fmtClock(r.clockOut):'<span style=color:var(--green)>勤務中</span>'}</td>
+        <td>${Math.floor(breakTotal(r,now)/60000)}分</td><td class="w">${fmtDur(workedMs(r,now))}</td>
+        <td><button class="editRec" data-id="${r.id}" style="color:var(--sub);display:inline-flex">${locked?ic.lock:ic.pencil}</button></td></tr>`).join('')}</tbody></table></div>`;
+  bindMonthNav('rec');
+  $('#addRec').onclick=()=>guardAdmin(()=>openEdit(null));
+  document.querySelectorAll('.editRec').forEach(b=>b.onclick=()=>guardAdmin(()=>openEdit(state.records.find(r=>r.id===b.dataset.id))));
+}
+function openEdit(rec){
+  const init=rec||{id:uid(),employeeId:state.employees[0]?.id||'',date:todayStr(),clockIn:combine(todayStr(),'09:00'),clockOut:combine(todayStr(),'18:00'),breakMs:3600000,breakStart:null};
+  const o=openModal(`<div class="mh"><div class="mt">${rec?'記録を編集':'記録を追加'}</div><button class="x" id="mx">${ic.x}</button></div>
+    <div class="field"><div>氏名</div><select class="inp" id="f_emp">${state.employees.map(e=>`<option value="${e.id}" ${e.id===init.employeeId?'selected':''}>${esc(e.name)}</option>`).join('')}</select></div>
+    <div class="field"><div>日付</div><input class="inp" type="date" id="f_date" value="${init.date}"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="field"><div>出勤</div><input class="inp" type="time" id="f_in" value="${toTimeInput(init.clockIn)}"></div>
+      <div class="field"><div>退勤（空欄=勤務中）</div><input class="inp" type="time" id="f_out" value="${toTimeInput(init.clockOut)}"></div></div>
+    <div class="field"><div>休憩（分）</div><input class="inp" type="number" min="0" id="f_brk" value="${Math.round((init.breakMs||0)/60000)}"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      ${rec?`<button class="btn" id="f_del" style="color:var(--red);border:1px solid var(--red)">${ic.trash}削除</button>`:''}
+      <button class="btn solid" id="f_save" style="flex:1;padding:10px">${ic.check}保存</button></div>`);
+  $('#mx',o).onclick=()=>closeModal(o);
+  if(rec)$('#f_del',o).onclick=()=>{state.records=state.records.filter(x=>x.id!==rec.id);save();closeModal(o);renderView();};
+  $('#f_save',o).onclick=()=>{
+    const date=$('#f_date',o).value,ci=combine(date,$('#f_in',o).value);let co=$('#f_out',o).value?combine(date,$('#f_out',o).value):null;
+    if(co!=null&&ci!=null&&co<ci)co+=86400000;
+    const obj={id:init.id,employeeId:$('#f_emp',o).value,date,clockIn:ci,clockOut:co,breakMs:Math.max(0,Number($('#f_brk',o).value))*60000,breakStart:null,edited:true};
+    const idx=state.records.findIndex(x=>x.id===obj.id);if(idx>=0)state.records[idx]=obj;else state.records.push(obj);
+    save();closeModal(o);renderView();};
+}
+
+/* ============ SUMMARY ============ */
+function renderSummary(){
+  const v=$('#view'),now=Date.now();
+  const map={};state.records.filter(r=>monthOf(r.date)===ui.sumMonth).forEach(r=>{const s=map[r.employeeId]||(map[r.employeeId]={days:new Set(),work:0,brk:0,ot:0});s.days.add(r.date);s.work+=workedMs(r,now);s.brk+=breakTotal(r,now);s.ot+=overtimeMs(r,now);});
+  const sum=state.employees.map(e=>({name:e.name,...(map[e.id]||{days:new Set(),work:0,brk:0,ot:0})})).filter(x=>x.days.size>0);
+  v.innerHTML=monthNavHTML('sum')+`<div class="rowBtw"><div class="label" style="margin:0">月次集計</div><div style="display:flex;gap:8px"><button class="btn ghost" id="sendBtn">${ic.up}送信</button><button class="btn solid" id="csv">${ic.dl}CSV出力</button></div></div>
+    <div class="tableWrap"><table><thead><tr><th>氏名</th><th>出勤日数</th><th>実働合計</th><th style="text-align:right;padding-right:12px">残業合計</th></tr></thead>
+    <tbody>${sum.length===0?`<tr><td colspan="4" class="muteRow">この月の記録はありません</td></tr>`:sum.map(s=>`<tr>
+      <td style="font-weight:800">${esc(s.name)}</td><td>${s.days.size}日</td><td>${fmtDurJp(s.work)}</td><td class="w" style="text-align:right;padding-right:12px">${fmtDurJp(s.ot)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="note">※実働＝退勤−出勤−休憩。残業＝1勤務で基準時間（${otHours()}時間）を超えた分。休憩合計はCSVに含まれます。勤務中の記録は現在時刻まで計算。</p>`;
+  bindMonthNav('sum');
+  $('#sendBtn').onclick=()=>sendMonth(ui.sumMonth);
+  $('#csv').onclick=()=>{
+    const rows=state.records.filter(r=>monthOf(r.date)===ui.sumMonth).sort((a,b)=>(a.clockIn||0)-(b.clockIn||0));
+    const head=['日付','氏名','出勤','退勤','休憩(分)','実働(時間)','残業(時間)','備考'];
+    const body=rows.map(r=>[r.date,empName(r.employeeId),fmtClock(r.clockIn),r.clockOut?fmtClock(r.clockOut):'勤務中',Math.floor(breakTotal(r,now)/60000),fmtDur(workedMs(r,now)),fmtDur(overtimeMs(r,now)),r.edited?'手修正':'']);
+    const csv='\uFEFF'+[head,...body].map(row=>row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    downloadBlob(csv,`勤怠_${ui.sumMonth}.csv`,'text/csv;charset=utf-8');};
+}
+
+/* ============ SETTINGS ============ */
+function renderSettings(){
+  const v=$('#view');
+  if(adminPin()&&!ui.adminUnlocked){
+    v.innerHTML=`<div class="panel pinCard" id="pinHost" style="max-width:360px;margin:0 auto"></div>`;
+    mountPin($('#pinHost'),{title:'管理者PIN',sub:'設定を開くには解除が必要です',mode:'verify',correct:adminPin(),onOk:()=>{ui.adminUnlocked=true;renderView();}});
+    return;
+  }
+  v.innerHTML=`
+    <div class="label">管理者ロック</div>
+    <div class="panel box" style="margin-bottom:28px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:${adminPin()?'var(--green)':'var(--sub)'};display:inline-flex">${ic.shield}</span>
+          <span style="font-size:14px;font-weight:800">${adminPin()?'設定済み（編集・設定をロック）':'未設定'}</span></div>
+        <div style="display:flex;gap:8px">
+          ${adminPin()?`<button class="btn" id="aLock" style="color:var(--tealDk);border:1px solid var(--line)">${ic.lock}ロック</button>`:''}
+          <button class="btn solid" id="aSet">${adminPin()?'変更':'設定する'}</button></div>
+      </div><p class="note">※忘れると設定・記録編集が開けなくなります。控えを残してください。</p>
+    </div>
+    <div class="label">従業員（打刻PIN）</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input class="inp" id="newName" placeholder="氏名を入力" style="flex:1">
+      <button class="btn solid" id="addEmp" style="padding:10px 16px">${ic.plus}追加</button></div>
+    <div class="tableWrap" style="margin-bottom:28px">
+      ${state.employees.length===0?`<div class="muteRow" style="background:var(--panel)">まだ登録がありません</div>`:state.employees.map(e=>`
+      <div class="empRow"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800">${esc(e.name)}</span>
+        <span class="tag ${e.pin?'on':'off'}">${e.pin?'PIN設定済':'PIN未設定'}</span></div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="setPin" data-id="${e.id}" style="font-size:14px;font-weight:800;color:var(--tealDk)">${e.pin?'変更':'PIN設定'}</button>
+          <button class="delEmp" data-id="${e.id}" style="color:var(--red);display:inline-flex">${ic.trash}</button></div></div>`).join('')}
+    </div>
+    <div class="label">残業の基準</div>
+    <div class="panel box" style="margin-bottom:28px">
+      <p>1勤務でこの時間を超えた分を残業として集計します（既定8時間）。法律上、25%以上の割増賃金は1日8時間超が対象です。深夜・休日・週40時間などの割増は含みません。</p>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input class="inp" type="number" min="0" step="0.5" id="otTh" value="${otHours()}" style="width:90px">
+        <span style="font-size:14px">時間 ／ 日</span></div>
+    </div>
+    <div class="label">月次送信</div>
+    <div class="panel box" style="margin-bottom:28px">
+      <p>月が変わると、前月分（CSV＋バックアップ）の送信を自動で確認します。送信先メールアドレスを登録しておくと、送信時に宛先が自動コピーされ、メールアプリで貼り付けるだけになります。</p>
+      <div class="field"><div>送信先メールアドレス</div>
+        <input class="inp" type="email" id="sendEmail" placeholder="例: jimu@example.com" value="${esc(state.settings.sendEmail||'')}"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;color:var(--sub)">前回の送信: ${state.settings.lastSentMonth||'なし'}</span>
+        <button class="btn solid" id="sendPrev" style="padding:8px 14px">${ic.up}先月分を送信</button></div>
+    </div>
+    <div class="label">バックアップ</div>
+    <div class="panel box">
+      <p>全データ（従業員・PIN・打刻記録）をファイルに書き出し／復元できます。端末の買い替えや消失に備え、定期的に保存してください。</p>
+      <div style="display:flex;gap:8px">
+        <button class="btn dk" id="bk" style="flex:1;padding:10px">${ic.dl}バックアップ保存</button>
+        <button class="btn ghost" id="rs" style="flex:1;padding:10px">${ic.up}復元</button>
+        <input type="file" id="rsFile" accept="application/json,.json" class="hidden"></div>
+    </div>`;
+  if(adminPin())$('#aLock').onclick=()=>{ui.adminUnlocked=false;renderView();};
+  $('#aSet').onclick=()=>openPinModal({title:'管理者PIN',mode:'set',onSet:p=>{state.settings.adminPin=p;save();renderView();}});
+  $('#otTh').onchange=e=>{const v=parseFloat(e.target.value);state.settings.otThreshold=(isNaN(v)||v<0)?8:v;save();};
+  const add=()=>{const n=$('#newName').value.trim();if(!n)return;state.employees.push({id:uid(),name:n,active:true,pin:''});save();renderView();};
+  $('#addEmp').onclick=add;$('#newName').onkeydown=e=>{if(e.key==='Enter')add();};
+  document.querySelectorAll('.setPin').forEach(b=>b.onclick=()=>{const e=state.employees.find(x=>x.id===b.dataset.id);
+    openPinModal({title:`${e.name} の打刻PIN`,mode:'set',onSet:p=>{e.pin=p;save();renderView();}});});
+  document.querySelectorAll('.delEmp').forEach(b=>b.onclick=()=>{const e=state.employees.find(x=>x.id===b.dataset.id);
+    if(confirm(`${e.name} を削除しますか？（過去の記録は残ります）`)){state.employees=state.employees.filter(x=>x.id!==e.id);save();renderView();}});
+  $('#bk').onclick=()=>downloadBlob(JSON.stringify(state,null,2),`timecard_backup_${todayStr()}.json`,'application/json');
+  $('#sendPrev').onclick=()=>sendMonth(prevMonthString());
+  $('#sendEmail').onchange=e=>{state.settings.sendEmail=e.target.value.trim();save();};
+  $('#rs').onclick=()=>$('#rsFile').click();
+  $('#rsFile').onchange=ev=>{const f=ev.target.files?.[0];if(!f)return;const rd=new FileReader();
+    rd.onload=()=>{try{const o=JSON.parse(rd.result);if(o&&Array.isArray(o.employees)&&Array.isArray(o.records)){
+      if(confirm('現在のデータを、選んだバックアップで置き換えます。よろしいですか？')){state={employees:o.employees,records:o.records,settings:o.settings||{adminPin:''}};ui.adminUnlocked=false;save();renderView();}}
+      else alert('バックアップファイルの形式が正しくありません。');}catch{alert('読み込みに失敗しました。');}ev.target.value='';};
+    rd.readAsText(f);};
+}
+
+/* ============ PIN modal / mount ============ */
+function mountPin(host,opts){
+  let val='',first='',step=0;
+  const draw=(err)=>{
+    host.innerHTML=`<div class="center" style="margin-bottom:8px;color:var(--teal)">${ic.key}</div>
+      <div class="pinTitle">${opts.title}</div><div class="pinSub">${opts.mode==='set'?(step===0?'新しいPIN（4桁）を入力':'確認のためもう一度'):(opts.sub||'')}</div>
+      <div class="dots">${[0,1,2,3].map(i=>`<div class="dot ${i<val.length?'on':''}"></div>`).join('')}</div>
+      <div class="pad">${['1','2','3','4','5','6','7','8','9','','0','del'].map(k=>k===''?'<div class="key blank"></div>':`<button class="key ${k==='del'?'fn':''}" data-k="${k}">${k==='del'?ic.del:k}</button>`).join('')}</div>
+      <div class="pinErr">${err||''}</div>${opts.onCancel?'<button id="pinCancel" style="font-size:14px;color:var(--sub);margin-top:4px">キャンセル</button>':''}`;
+    host.querySelectorAll('.key[data-k]').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='del'){val=val.slice(0,-1);draw();return;}
+      if(val.length>=4)return;val+=k;draw();
+      if(val.length===4)setTimeout(()=>{
+        if(opts.mode==='verify'){if(val===opts.correct)opts.onOk();else{val='';draw('PINが違います');}}
+        else{if(step===0){first=val;val='';step=1;draw();}else{if(val===first)opts.onSet(val);else{val='';first='';step=0;draw('PINが一致しません');}}}
+      },110);});
+    if(opts.onCancel){const c=host.querySelector('#pinCancel');if(c)c.onclick=opts.onCancel;}
+  };
+  draw();
+}
+function openPinModal(opts){
+  const o=openModal(`<div id="pinHost"></div>`);
+  mountPin($('#pinHost',o),{...opts,onOk:()=>{closeModal(o);opts.onOk&&opts.onOk();},onSet:p=>{closeModal(o);opts.onSet&&opts.onSet(p);},onCancel:()=>closeModal(o)});
+}
+
+/* ============ modal / flash / download ============ */
+function openModal(inner){const o=document.createElement('div');o.className='overlay';
+  o.innerHTML=`<div class="modal"></div>`;o.querySelector('.modal').innerHTML=inner;
+  o.onclick=e=>{if(e.target===o)closeModal(o);};document.body.appendChild(o);return o;}
+function closeModal(o){o.remove();}
+function showFlash(msg){const f=document.createElement('div');f.className='flash';f.innerHTML=ic.check+'<span>'+esc(msg)+'</span>';
+  document.body.appendChild(f);setTimeout(()=>f.remove(),2600);}
+function downloadBlob(content,filename,type){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+
+/* ============ monthly send ============ */
+function prevMonthString(){const d=new Date();const p=new Date(d.getFullYear(),d.getMonth()-1,1);return `${p.getFullYear()}-${pad(p.getMonth()+1)}`;}
+function makeMonthExport(month){
+  const now=Date.now();
+  const rows=state.records.filter(r=>monthOf(r.date)===month).sort((a,b)=>(a.clockIn||0)-(b.clockIn||0));
+  const head=['日付','氏名','出勤','退勤','休憩(分)','実働(時間)','備考'];
+  const body=rows.map(r=>[r.date,empName(r.employeeId),fmtClock(r.clockIn),r.clockOut?fmtClock(r.clockOut):'勤務中',Math.floor(breakTotal(r,now)/60000),fmtDur(workedMs(r,now)),r.edited?'手修正':'']);
+  const csvStr='\uFEFF'+[head,...body].map(row=>row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  return {csvStr,csvName:`勤怠_${month}.csv`,jsonStr:JSON.stringify(state,null,2),jsonName:`timecard_backup_${todayStr()}.json`};
+}
+function doShare(month,cb){
+  const e=makeMonthExport(month);
+  const addr=(state.settings.sendEmail||'').trim();
+  if(addr&&navigator.clipboard){navigator.clipboard.writeText(addr).then(()=>showFlash('宛先をコピーしました：'+addr)).catch(()=>{});}
+  const files=[new File([e.csvStr],e.csvName,{type:'text/csv'}),new File([e.jsonStr],e.jsonName,{type:'application/json'})];
+  if(navigator.canShare&&navigator.canShare({files})){
+    navigator.share({files,title:`勤怠データ ${month}`,text:`【勤怠データ ${month}】道の駅ゆふいん 勤怠記録（CSV・バックアップ）を送付します。${addr?'\n宛先: '+addr:''}`}).then(()=>cb(true)).catch(()=>cb(false));
+  }else{
+    downloadBlob(e.csvStr,e.csvName,'text/csv;charset=utf-8');
+    setTimeout(()=>downloadBlob(e.jsonStr,e.jsonName,'application/json'),350);
+    cb(true);
+  }
+}
+function sendMonth(month){doShare(month,ok=>{if(ok){if(month===prevMonthString()){state.settings.lastSentMonth=month;save();}showFlash(`${month} を送信しました`);renderView();}});}
+let monthlyDismissed=false;
+function checkMonthlySend(){
+  const t=prevMonthString();
+  if((state.settings.lastSentMonth||'')===t||monthlyDismissed)return;
+  if(!state.records.some(r=>monthOf(r.date)===t))return;
+  const [y,m]=t.split('-');
+  const o=openModal(`<div class="mh"><div class="mt">月次データの送信</div></div>
+    <p style="font-size:14px;margin:0 0 16px;line-height:1.7">新しい月になりました。<b>${y}年${Number(m)}月</b>分の勤怠データ（CSV＋バックアップ）を別のPCへ送信しますか？</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="ms_later" style="color:var(--sub);border:1px solid var(--line);padding:10px 16px">あとで</button>
+      <button class="btn solid" id="ms_send" style="flex:1;padding:10px">${ic.up}送信する</button></div>`);
+  $('#ms_later',o).onclick=()=>{monthlyDismissed=true;closeModal(o);};
+  $('#ms_send',o).onclick=()=>{closeModal(o);sendMonth(t);};
+}
+
+/* ============ boot ============ */
+load();render();checkMonthlySend();
+if('serviceWorker'in navigator&&location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
