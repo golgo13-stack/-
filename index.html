@@ -362,7 +362,7 @@ function renderSettings(){
     </div>
     <div class="label">月次送信</div>
     <div class="panel box" style="margin-bottom:28px">
-      <p>月が変わると、前月分（CSV＋バックアップ）の送信を自動で確認します。送信先メールアドレスを登録しておくと、送信時に宛先が自動コピーされ、メールアプリで貼り付けるだけになります。</p>
+      <p>月が変わると、前月分の勤怠CSV（給与用）の送信を自動で確認します。送信先メールアドレスを登録しておくと、送信時に宛先が自動コピーされ、メールアプリで貼り付けるだけになります。※バックアップは下の「バックアップ」から別途送信できます。</p>
       <div class="field"><div>送信先メールアドレス</div>
         <input class="inp" type="email" id="sendEmail" placeholder="例: jimu@example.com" value="${esc(state.settings.sendEmail||'')}"></div>
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -375,7 +375,8 @@ function renderSettings(){
       <div style="display:flex;gap:8px">
         <button class="btn dk" id="bk" style="flex:1;padding:10px">${ic.dl}バックアップ保存</button>
         <button class="btn ghost" id="rs" style="flex:1;padding:10px">${ic.up}復元</button>
-        <input type="file" id="rsFile" accept="application/json,.json" class="hidden"></div>
+        <input type="file" id="rsFile" accept="application/json,.json,text/plain,.txt" class="hidden"></div>
+      <button class="btn solid" id="bkSend" style="width:100%;margin-top:8px;padding:10px">${ic.up}バックアップを送信（メール等）</button>
     </div>`;
   if(adminPin())$('#aLock').onclick=()=>{ui.adminUnlocked=false;renderView();};
   $('#aSet').onclick=()=>openPinModal({title:'管理者PIN',mode:'set',onSet:p=>{state.settings.adminPin=p;save();renderView();}});
@@ -400,6 +401,7 @@ function renderSettings(){
   document.querySelectorAll('.delEmp').forEach(b=>b.onclick=()=>{const e=state.employees.find(x=>x.id===b.dataset.id);
     if(confirm(`${e.name} を削除しますか？（過去の記録は残ります）`)){state.employees=state.employees.filter(x=>x.id!==e.id);save();renderView();}});
   $('#bk').onclick=()=>downloadBlob(JSON.stringify(state,null,2),`timecard_backup_${todayStr()}.json`,'application/json');
+  $('#bkSend').onclick=()=>shareBackup();
   $('#sendPrev').onclick=()=>sendMonth(prevMonthString());
   $('#sendEmail').onchange=e=>{state.settings.sendEmail=e.target.value.trim();save();};
   $('#rs').onclick=()=>$('#rsFile').click();
@@ -454,25 +456,31 @@ function makeMonthExport(month){
   const csvStr='\uFEFF'+[head,...body].map(row=>row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   return {csvStr,csvName:`勤怠_${month}.csv`,jsonStr:JSON.stringify(state,null,2),jsonName:`timecard_backup_${todayStr()}.json`};
 }
-function doShare(month,cb){
-  const e=makeMonthExport(month);
+function shareOne(file,title,text,dlName,dlContent,dlType,cb){
   const addr=(state.settings.sendEmail||'').trim();
-  const files=[new File([e.csvStr],`kintai_${month}.csv`,{type:'text/csv'}),new File([e.jsonStr],`kintai_backup_${todayStr()}.json`,{type:'application/json'})];
   const fallback=()=>{
     if(addr&&navigator.clipboard)navigator.clipboard.writeText(addr).catch(()=>{});
-    downloadBlob(e.csvStr,e.csvName,'text/csv;charset=utf-8');
-    setTimeout(()=>downloadBlob(e.jsonStr,e.jsonName,'application/json'),350);
-    showFlash('共有が使えないため2ファイルを保存しました');
-    cb(true);
+    downloadBlob(dlContent,dlName,dlType);
+    showFlash('共有が使えないため保存しました');
+    if(cb)cb(true);
   };
-  if(navigator.canShare&&navigator.canShare({files})){
-    navigator.share({files,title:`勤怠データ ${month}`,text:`【勤怠データ ${month}】道の駅ゆふいん 勤怠記録（CSV・バックアップ）${addr?'\n宛先: '+addr:''}`})
-      .then(()=>cb(true))
-      .catch(err=>{if(err&&err.name==='AbortError'){cb(false);}else{fallback();}});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title,text:text+(addr?'\n宛先: '+addr:'')})
+      .then(()=>{if(cb)cb(true);})
+      .catch(err=>{if(err&&err.name==='AbortError'){if(cb)cb(false);}else{fallback();}});
     if(addr&&navigator.clipboard)navigator.clipboard.writeText(addr).catch(()=>{});
-  }else{
-    fallback();
-  }
+  }else{fallback();}
+}
+function doShare(month,cb){
+  const e=makeMonthExport(month);
+  const f=new File([e.csvStr],`kintai_${month}.csv`,{type:'text/csv'});
+  shareOne(f,`勤怠CSV ${month}`,`【勤怠 ${month}】道の駅ゆふいん 勤務記録（CSV）`,e.csvName,e.csvStr,'text/csv;charset=utf-8',cb);
+}
+function shareBackup(cb){
+  const name=`kintai_backup_${todayStr()}.txt`;
+  const json=JSON.stringify(state,null,2);
+  const f=new File([json],name,{type:'text/plain'});
+  shareOne(f,'勤怠バックアップ',`道の駅ゆふいん 勤怠バックアップ（復元用・${todayStr()}）`,name,json,'text/plain',cb);
 }
 function sendMonth(month){doShare(month,ok=>{if(ok){if(month===prevMonthString()){state.settings.lastSentMonth=month;save();}showFlash(`${month} を送信しました`);renderView();}});}
 let monthlyDismissed=false;
@@ -482,7 +490,7 @@ function checkMonthlySend(){
   if(!state.records.some(r=>monthOf(r.date)===t))return;
   const [y,m]=t.split('-');
   const o=openModal(`<div class="mh"><div class="mt">月次データの送信</div></div>
-    <p style="font-size:14px;margin:0 0 16px;line-height:1.7">新しい月になりました。<b>${y}年${Number(m)}月</b>分の勤怠データ（CSV＋バックアップ）を別のPCへ送信しますか？</p>
+    <p style="font-size:14px;margin:0 0 16px;line-height:1.7">新しい月になりました。<b>${y}年${Number(m)}月</b>分の勤怠CSV（給与用）を別のPCへ送信しますか？</p>
     <div style="display:flex;gap:8px">
       <button class="btn" id="ms_later" style="color:var(--sub);border:1px solid var(--line);padding:10px 16px">あとで</button>
       <button class="btn solid" id="ms_send" style="flex:1;padding:10px">${ic.up}送信する</button></div>`);
