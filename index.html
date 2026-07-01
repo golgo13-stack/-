@@ -328,6 +328,12 @@ function renderSettings(){
           <button class="btn solid" id="aSet">${adminPin()?'変更':'設定する'}</button></div>
       </div><p class="note">※忘れると設定・記録編集が開けなくなります。控えを残してください。</p>
     </div>
+    <div class="label">共有メニューのテスト</div>
+    <div class="panel box" style="margin-bottom:28px">
+      <p>この端末で共有メニューが開くかを確認できます。ダミーのファイルを共有にかけるだけで、勤怠データは送信されません。</p>
+      <div id="shareTestResult" style="font-size:13px;color:var(--sub);margin-bottom:10px">状態: 未テスト</div>
+      <button class="btn solid" id="shareTest" style="padding:10px 16px">${ic.up}共有メニューを開くテスト</button>
+    </div>
     <div class="label">表示サイズ</div>
     <div class="panel box" style="margin-bottom:28px">
       <p>画面全体の大きさを調整できます。タブレットに合わせて見やすいサイズを選んでください。</p>
@@ -375,6 +381,18 @@ function renderSettings(){
   $('#aSet').onclick=()=>openPinModal({title:'管理者PIN',mode:'set',onSet:p=>{state.settings.adminPin=p;save();renderView();}});
   $('#otTh').onchange=e=>{const v=parseFloat(e.target.value);state.settings.otThreshold=(isNaN(v)||v<0)?8:v;save();};
   document.querySelectorAll('.zoomBtn').forEach(b=>b.onclick=()=>{state.settings.zoom=parseFloat(b.dataset.z);save();applyZoom();renderView();});
+  const st=$('#shareTest');if(st)st.onclick=()=>{
+    const res=$('#shareTestResult');
+    const set=(msg,color)=>{if(res){res.textContent='状態: '+msg;res.style.color=color||'var(--sub)';}};
+    const secure=window.isSecureContext;
+    if(!secure){set('この接続では共有不可（https でない可能性）','var(--red)');return;}
+    const f=[new File(['共有テスト'],'test.txt',{type:'text/plain'})];
+    if(!navigator.share){set('この端末は共有機能に非対応','var(--red)');return;}
+    if(!(navigator.canShare&&navigator.canShare({files:f}))){set('ファイル共有に非対応（送信時は自動でダウンロードに切替）','var(--amber)');return;}
+    navigator.share({files:f,title:'共有テスト',text:'共有メニューのテストです'})
+      .then(()=>set('OK：共有メニューが開きました','var(--green)'))
+      .catch(err=>{if(err&&err.name==='AbortError')set('共有メニューは開きました（キャンセルされました）','var(--green)');else set('共有でエラー: '+(err&&err.name||'不明'),'var(--red)');});
+  };
   const add=()=>{const n=$('#newName').value.trim();if(!n)return;state.employees.push({id:uid(),name:n,active:true,pin:''});save();renderView();};
   $('#addEmp').onclick=add;$('#newName').onkeydown=e=>{if(e.key==='Enter')add();};
   document.querySelectorAll('.setPin').forEach(b=>b.onclick=()=>{const e=state.employees.find(x=>x.id===b.dataset.id);
