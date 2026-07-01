@@ -439,14 +439,21 @@ function makeMonthExport(month){
 function doShare(month,cb){
   const e=makeMonthExport(month);
   const addr=(state.settings.sendEmail||'').trim();
-  if(addr&&navigator.clipboard){navigator.clipboard.writeText(addr).then(()=>showFlash('宛先をコピーしました：'+addr)).catch(()=>{});}
   const files=[new File([e.csvStr],e.csvName,{type:'text/csv'}),new File([e.jsonStr],e.jsonName,{type:'application/json'})];
-  if(navigator.canShare&&navigator.canShare({files})){
-    navigator.share({files,title:`勤怠データ ${month}`,text:`【勤怠データ ${month}】道の駅ゆふいん 勤怠記録（CSV・バックアップ）を送付します。${addr?'\n宛先: '+addr:''}`}).then(()=>cb(true)).catch(()=>cb(false));
-  }else{
+  const fallback=()=>{
+    if(addr&&navigator.clipboard)navigator.clipboard.writeText(addr).catch(()=>{});
     downloadBlob(e.csvStr,e.csvName,'text/csv;charset=utf-8');
     setTimeout(()=>downloadBlob(e.jsonStr,e.jsonName,'application/json'),350);
+    showFlash('共有が使えないため2ファイルを保存しました');
     cb(true);
+  };
+  if(navigator.canShare&&navigator.canShare({files})){
+    navigator.share({files,title:`勤怠データ ${month}`,text:`【勤怠データ ${month}】道の駅ゆふいん 勤怠記録（CSV・バックアップ）${addr?'\n宛先: '+addr:''}`})
+      .then(()=>cb(true))
+      .catch(err=>{if(err&&err.name==='AbortError'){cb(false);}else{fallback();}});
+    if(addr&&navigator.clipboard)navigator.clipboard.writeText(addr).catch(()=>{});
+  }else{
+    fallback();
   }
 }
 function sendMonth(month){doShare(month,ok=>{if(ok){if(month===prevMonthString()){state.settings.lastSentMonth=month;save();}showFlash(`${month} を送信しました`);renderView();}});}
