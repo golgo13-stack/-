@@ -457,7 +457,7 @@ function makeMonthExport(month){
 function doShare(month,cb){
   const e=makeMonthExport(month);
   const addr=(state.settings.sendEmail||'').trim();
-  const files=[new File([e.csvStr],e.csvName,{type:'text/csv'}),new File([e.jsonStr],e.jsonName,{type:'application/json'})];
+  const files=[new File([e.csvStr],`kintai_${month}.csv`,{type:'text/csv'}),new File([e.jsonStr],`kintai_backup_${todayStr()}.json`,{type:'application/json'})];
   const fallback=()=>{
     if(addr&&navigator.clipboard)navigator.clipboard.writeText(addr).catch(()=>{});
     downloadBlob(e.csvStr,e.csvName,'text/csv;charset=utf-8');
