@@ -108,7 +108,11 @@
         <div class="row" style="align-items:baseline"><div class="brandTitle">給与計算</div><div class="sysTag">M system ver2.963</div></div>
       </div>
     </div>
-    <button class="btn ghost sm" id="resetData">別のデータを読み込む</button>
+    <div class="row">
+      <button class="btn solid sm" id="addCsv">CSVを読み込む</button>
+      <button class="btn ghost sm" id="resetData">消去</button>
+    </div>
+    <input type="file" id="topFile" accept=".csv,text/csv" multiple class="hidden">
   </div>
   <div id="view"></div>
 </div>
@@ -188,18 +192,23 @@ function isHoliday(dateStr){
   return new Date(y,m-1,d).getDay()===cfg.holidayWeekday;
 }
 function calcRecord(r){
-  if(r.clockIn==null||r.clockOut==null)return null;       // skip incomplete
-  const worked=Math.max(0,r.clockOut-r.clockIn-(r.breakMs||0));
-  if(worked<=0)return null;
-  const nSpan=nightMs(r.clockIn,r.clockOut);
-  const night=Math.min(nSpan,worked);                      // cap at actual worked
+  if(r.incomplete)return null;                             // 退勤が「勤務中」の行は対象外
+  const worked=r.worked;
+  if(worked==null||worked<=0)return null;
+  // 深夜時間は出勤〜退勤の時刻から算出（時刻が読めない行は0）
+  const night=(r.inMs!=null&&r.outMs!=null)?Math.min(nightMs(r.inMs,r.outMs),worked):0;
   const hol=isHoliday(r.date);
   const thr=cfg.otThreshold*HOUR;
   const ot=hol?0:Math.max(0,worked-thr);
   const holiday=hol?worked:0;
-  return {date:r.date,clockIn:r.clockIn,clockOut:r.clockOut,break:r.breakMs||0,worked,night,ot,holiday,edited:r.edited};
+  return {date:r.date,clockIn:r.inMs,clockOut:r.outMs,break:r.breakMs||0,worked,night,ot,holiday,edited:r.edited};
 }
-function wageOf(empId){const w=cfg.wages[empId];return (w==null||w==='')?0:Number(w);}
+function wageOf(name){const w=cfg.wages[name];return (w==null||w==='')?0:Number(w);}
+/* CSVに登場する全氏名（月をまたいで収集） */
+function allNames(){
+  const s=new Set();(data&&data.records||[]).forEach(r=>s.add(r.name));
+  return [...s].sort((a,b)=>a.localeCompare(b,'ja'));
+}
 function payOf(c,rate){
   return rate*hrs(c.worked)                  // base on all worked hours
        + rate*cfg.rates.ot*hrs(c.ot)         // overtime premium
@@ -210,28 +219,28 @@ function payOf(c,rate){
 /* aggregate per employee for current month */
 function summarize(){
   const recs=(data.records||[]).filter(r=>monthOf(r.date)===ui.month);
-  const byEmp={};
+  const byName={};
   let incomplete=0;
   recs.forEach(r=>{
     const c=calcRecord(r);
-    if(!c){if(r.clockIn!=null&&r.clockOut==null)incomplete++;return;}
-    const s=byEmp[r.employeeId]||(byEmp[r.employeeId]={days:new Set(),worked:0,night:0,ot:0,holiday:0,recs:[]});
+    if(!c){if(r.incomplete)incomplete++;return;}
+    const s=byName[r.name]||(byName[r.name]={days:new Set(),worked:0,night:0,ot:0,holiday:0,recs:[]});
     s.days.add(r.date);s.worked+=c.worked;s.night+=c.night;s.ot+=c.ot;s.holiday+=c.holiday;s.recs.push(c);
   });
-  const rows=(data.employees||[]).map(e=>{
-    const s=byEmp[e.id];if(!s)return null;
-    const rate=wageOf(e.id);
+  const rows=Object.keys(byName).sort((a,b)=>a.localeCompare(b,'ja')).map(name=>{
+    const s=byName[name];
+    const rate=wageOf(name);
     const pay=s.recs.reduce((a,c)=>a+payOf(c,rate),0);
     const base=rate*hrs(s.worked);
-    return {id:e.id,name:e.name,rate,days:s.days.size,worked:s.worked,night:s.night,ot:s.ot,holiday:s.holiday,base,extra:pay-base,total:pay,recs:s.recs};
-  }).filter(Boolean);
+    return {name,rate,days:s.days.size,worked:s.worked,night:s.night,ot:s.ot,holiday:s.holiday,base,extra:pay-base,total:pay,recs:s.recs};
+  });
   return {rows,incomplete};
 }
 
 /* ===== rendering ===== */
 const view=$('#view');
 function render(){
-  if(!data||!Array.isArray(data.employees)||!Array.isArray(data.records)){renderImport();return;}
+  if(!data||!Array.isArray(data.records)||data.records.length===0){renderImport();return;}
   renderMain();
 }
 
@@ -239,35 +248,133 @@ function renderImport(){
   view.innerHTML=`
   <div class="drop" id="drop">
     ${ic.up}
-    <div class="big">打刻アプリのバックアップを読み込む</div>
-    <p>「集計」タブの<b>送信</b>で書き出した <span class="mono">timecard_backup_YYYY-MM-DD.json</span> を<br>ここにドラッグ＆ドロップ、またはクリックして選択してください。</p>
+    <div class="big">打刻アプリのCSVを読み込む</div>
+    <p>打刻アプリの<b>送信</b>／<b>CSV出力</b>で書き出した <span class="mono">kintai_YYYY-MM.csv</span> を<br>ここにドラッグ＆ドロップ、またはクリックして選択してください。</p>
     <p><button class="btn solid" id="pick" style="margin-top:8px">ファイルを選択</button></p>
-    <input type="file" id="fileInp" accept=".json,application/json" class="hidden">
+    <input type="file" id="fileInp" accept=".csv,text/csv" multiple class="hidden">
   </div>
-  <div class="note">※ 読み込んだデータと時給などの設定はこの端末（ブラウザ）に保存されます。サーバーには送信されません。</div>`;
+  <div class="note">※ 複数月のCSVをまとめて選ぶこともできます（同じ月を読み直すと最新の内容に置き換わります）。<br>
+  ※ 読み込んだデータと時給などの設定はこの端末（ブラウザ）に保存されます。サーバーには送信されません。</div>`;
   const drop=$('#drop'),inp=$('#fileInp');
   $('#pick').onclick=()=>inp.click();
   drop.onclick=e=>{if(e.target.closest('button'))return;inp.click();};
-  inp.onchange=()=>{if(inp.files[0])readFile(inp.files[0]);};
+  inp.onchange=()=>{if(inp.files.length)readFiles(inp.files);};
   ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
   ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
-  drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)readFile(f);});
+  drop.addEventListener('drop',e=>{if(e.dataTransfer.files.length)readFiles(e.dataTransfer.files);});
 }
-function readFile(file){
-  const fr=new FileReader();
-  fr.onload=()=>{
-    try{
-      const o=JSON.parse(fr.result);
-      if(!Array.isArray(o.employees)||!Array.isArray(o.records))throw 0;
-      data={employees:o.employees,records:o.records,settings:o.settings||{}};
-      if(o.settings&&typeof o.settings.otThreshold==='number')cfg.otThreshold=o.settings.otThreshold;
-      // default month = latest month present in data
-      const months=[...new Set(o.records.map(r=>monthOf(r.date)))].sort();
-      if(months.length)ui.month=months[months.length-1];
-      saveData();saveCfg();render();flash('読み込みました');
-    }catch(e){alert('このファイルは打刻アプリのバックアップ（JSON）として読み込めませんでした。');}
-  };
-  fr.readAsText(file);
+
+/* ===== CSV parsing ===== */
+/* 文字コード判定：UTF-8で読み、化けていればShift_JISで読み直す（Excel保存対策） */
+function decodeBytes(buf){
+  const u=new TextDecoder('utf-8').decode(buf);
+  if(u.indexOf('�')<0)return u;
+  try{return new TextDecoder('shift_jis').decode(buf);}catch(e){return u;}
+}
+/* 引用符・カンマ・改行に対応した CSV パーサ */
+function parseCSV(text){
+  text=text.replace(/^﻿/,'');
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){
+      if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; }
+      else cur+=ch;
+    }else{
+      if(ch==='"')q=true;
+      else if(ch===','){row.push(cur);cur='';}
+      else if(ch==='\r'){}
+      else if(ch==='\n'){row.push(cur);cur='';rows.push(row);row=[];}
+      else cur+=ch;
+    }
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(r=>r.some(c=>String(c).trim()!==''));
+}
+const norm=s=>String(s==null?'':s).replace(/\s/g,'').trim();
+function colIndex(head,...cands){
+  for(const c of cands){const i=head.findIndex(h=>norm(h)===c);if(i>=0)return i;}
+  for(const c of cands){const i=head.findIndex(h=>norm(h).indexOf(c)===0);if(i>=0)return i;}
+  return -1;
+}
+/* "YYYY-MM-DD" / "YYYY/M/D" → "YYYY-MM-DD" */
+function normDate(s){
+  const m=norm(s).match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+  return m?`${m[1]}-${pad(+m[2])}-${pad(+m[3])}`:null;
+}
+/* "8:30" → ms ／ "8.5" のような小数時間も許容 */
+function durToMs(s){
+  const t=norm(s);if(t==='')return null;
+  const m=t.match(/^(\d+):(\d{1,2})$/);
+  if(m)return (+m[1]*60 + +m[2])*60000;
+  const n=Number(t);
+  return isNaN(n)?null:Math.round(n*HOUR);
+}
+/* 日付 + "HH:MM" → ミリ秒 */
+function clockToMs(dateStr,hm){
+  const t=norm(hm).match(/^(\d{1,2}):(\d{2})$/);
+  if(!t||!dateStr)return null;
+  const [y,mo,d]=dateStr.split('-').map(Number);
+  return new Date(y,mo-1,d,+t[1],+t[2],0,0).getTime();
+}
+
+/* 打刻CSV → 正規化レコード配列 */
+function parseTimecardCSV(text){
+  const rows=parseCSV(text);
+  if(!rows.length)throw new Error('empty');
+  const head=rows[0];
+  const iDate=colIndex(head,'日付'), iName=colIndex(head,'氏名','名前');
+  if(iDate<0||iName<0)throw new Error('header');
+  const iIn=colIndex(head,'出勤'), iOut=colIndex(head,'退勤'),
+        iBrk=colIndex(head,'休憩(分)','休憩'), iWork=colIndex(head,'実働(時間)','実働');
+  const iNote=colIndex(head,'備考');
+  const out=[];
+  for(let k=1;k<rows.length;k++){
+    const c=rows[k];
+    const date=normDate(c[iDate]); const name=String(c[iName]==null?'':c[iName]).trim();
+    if(!date||!name)continue;
+    const outRaw=norm(iOut>=0?c[iOut]:'');
+    const incomplete=(outRaw===''||outRaw==='勤務中');
+    const breakMs=(iBrk>=0?(Number(norm(c[iBrk]))||0):0)*60000;
+    let inMs=iIn>=0?clockToMs(date,c[iIn]):null;
+    let outMs=incomplete?null:clockToMs(date,outRaw);
+    if(inMs!=null&&outMs!=null&&outMs<=inMs)outMs+=86400000;   // 日をまたぐ勤務
+    let worked=iWork>=0?durToMs(c[iWork]):null;                 // CSVの実働を優先
+    if(worked==null&&inMs!=null&&outMs!=null)worked=Math.max(0,outMs-inMs-breakMs);
+    out.push({date,name,inMs,outMs,breakMs,worked,incomplete,
+      edited:iNote>=0&&norm(c[iNote]).indexOf('手修正')>=0});
+  }
+  if(!out.length)throw new Error('norows');
+  return out;
+}
+
+/* 複数ファイル読み込み：同じ月は新しい内容で置き換え、他の月は残す */
+function readFiles(files){
+  const list=[...files];let done=0,added=[],failed=[];
+  list.forEach(file=>{
+    const fr=new FileReader();
+    fr.onload=()=>{
+      try{
+        const recs=parseTimecardCSV(decodeBytes(fr.result));
+        const months=[...new Set(recs.map(r=>monthOf(r.date)))];
+        if(!data||!Array.isArray(data.records))data={records:[]};
+        data.records=data.records.filter(r=>!months.includes(monthOf(r.date))).concat(recs);
+        added.push(...months);
+      }catch(e){failed.push(file.name);}
+      if(++done===list.length)finishImport(added,failed);
+    };
+    fr.onerror=()=>{failed.push(file.name);if(++done===list.length)finishImport(added,failed);};
+    fr.readAsArrayBuffer(file);
+  });
+}
+function finishImport(added,failed){
+  if(added.length){
+    const months=[...new Set(added)].sort();
+    ui.month=months[months.length-1];
+    saveData();render();
+    flash(`${months.join('・')} を読み込みました`);
+  }else{ render(); }
+  if(failed.length)alert(`次のファイルは打刻アプリのCSVとして読み込めませんでした:\n${failed.join('\n')}\n\n「日付」「氏名」の列があるCSVを選んでください。`);
 }
 
 function monthNav(){
@@ -296,7 +403,7 @@ function renderMain(){
         </tr></thead>
         <tbody>
         ${rows.length===0?`<tr><td colspan="10" class="muteRow">この月の記録はありません</td></tr>`:
-          rows.map(r=>`<tr class="clickRow" data-id="${r.id}">
+          rows.map(r=>`<tr class="clickRow" data-name="${esc(r.name)}">
             <td class="name">${esc(r.name)}</td>
             <td>${r.rate?yen(r.rate):'<span class="sub">未設定</span>'}</td>
             <td>${r.days}日</td>
@@ -316,40 +423,41 @@ function renderMain(){
         </tr></tfoot>`:''}
       </table>
     </div>
-    <div class="note">行をタップすると日別の内訳が表示されます。実働＝退勤−出勤−休憩。総支給＝基本給＋各割増。社会保険・税の控除は含みません。</div>
+    <div class="note">行をタップすると日別の内訳が表示されます。実働はCSVの「実働(時間)」をそのまま使用（＝退勤−出勤−休憩）。深夜時間は出勤・退勤の時刻から算出します。総支給＝基本給＋各割増で、社会保険・税の控除は含みません。</div>
 
     ${wagesPanel(rows)}
     ${settingsPanel()}
 
-    <div class="src">読込元: ${esc((data.employees||[]).length)}名 / ${esc((data.records||[]).length)}件の記録${data.settings&&data.settings.otThreshold!=null?` ・基準時間 ${data.settings.otThreshold}h`:''}</div>
+    <div class="src">読込済み: ${allNames().length}名 / ${(data.records||[]).length}件 ・対象月 ${[...new Set((data.records||[]).map(r=>monthOf(r.date)))].sort().join('、')}</div>
   `;
   // bind
   document.querySelectorAll('.navBtn').forEach(b=>b.onclick=()=>shiftMonth(Number(b.dataset.mn)));
-  document.querySelectorAll('.clickRow').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
+  document.querySelectorAll('.clickRow').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.name));
   $('#csv').onclick=()=>exportCSV(rows,tot);
   bindWages();bindSettings();
 }
 
 function wagesPanel(rows){
-  const emps=(data.employees||[]);
+  const names=allNames();
+  const thisMonthNames=new Set(rows.map(r=>r.name));
   return `<details open><summary>${ic.tri}時給の設定（従業員ごと）</summary>
     <div class="panel box" style="margin-top:8px">
       <div class="grid2">
-        ${emps.map(e=>`<div class="field">
-          <div>${esc(e.name)}${e.active===false?' <span class="sub">(無効)</span>':''}</div>
+        ${names.map(n=>`<div class="field">
+          <div>${esc(n)}${thisMonthNames.has(n)?'':' <span class="sub">(今月の記録なし)</span>'}</div>
           <div class="row"><span class="sub">¥</span>
-            <input class="wageInp wage" data-id="${e.id}" type="number" inputmode="numeric" min="0" step="10"
-              value="${cfg.wages[e.id]??''}" placeholder="0"> <span class="sub">/時</span></div>
+            <input class="wageInp wage" data-name="${esc(n)}" type="number" inputmode="numeric" min="0" step="10"
+              value="${cfg.wages[n]??''}" placeholder="0"> <span class="sub">/時</span></div>
         </div>`).join('')}
       </div>
-      <div class="note">入力すると自動保存され、次回もこの端末に残ります。</div>
+      <div class="note">入力すると自動保存され、次回もこの端末に残ります。時給は<b>氏名</b>で記憶されます（打刻アプリで改名すると再入力が必要です）。</div>
     </div>
   </details>`;
 }
 function bindWages(){
   document.querySelectorAll('.wage').forEach(inp=>inp.onchange=()=>{
-    const v=inp.value.trim();
-    if(v==='')delete cfg.wages[inp.dataset.id];else cfg.wages[inp.dataset.id]=Math.max(0,Number(v)||0);
+    const v=inp.value.trim(),n=inp.dataset.name;
+    if(v==='')delete cfg.wages[n];else cfg.wages[n]=Math.max(0,Number(v)||0);
     saveCfg();render();
   });
 }
@@ -405,9 +513,9 @@ function bindSettings(){
 
 /* ===== detail modal ===== */
 function openDetail(empId){
-  const {rows}=summarize();const r=rows.find(x=>x.id===empId);if(!r)return;
+  const {rows}=summarize();const r=rows.find(x=>x.name===empId);if(!r)return;
   const [y,m]=ui.month.split('-');
-  const recs=r.recs.slice().sort((a,b)=>a.clockIn-b.clockIn);
+  const recs=r.recs.slice().sort((a,b)=>a.date===b.date?((a.clockIn||0)-(b.clockIn||0)):a.date.localeCompare(b.date));
   const ov=document.createElement('div');ov.className='overlay';
   ov.innerHTML=`<div class="modal">
     <div class="mh"><div class="mt">${esc(r.name)} ・ ${y}年${Number(m)}月</div><button class="x" id="cx">${ic.x}</button></div>
@@ -451,7 +559,9 @@ function flash(msg){const f=document.createElement('div');f.className='flash';f.
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});}
 
 /* ===== boot ===== */
-$('#resetData').onclick=()=>{if(confirm('読み込んだ勤怠データを消去して、別のバックアップを読み込みますか？\n（時給などの設定は残ります）')){data=null;localStorage.removeItem(DKEY);render();}};
+$('#addCsv').onclick=()=>$('#topFile').click();
+$('#topFile').onchange=()=>{const f=$('#topFile');if(f.files.length)readFiles(f.files);f.value='';};
+$('#resetData').onclick=()=>{if(confirm('読み込んだ勤怠データをすべて消去しますか？\n（時給・割増などの設定は残ります）')){data=null;localStorage.removeItem(DKEY);render();}};
 loadAll();render();
 </script>
 </body>
