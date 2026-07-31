@@ -76,6 +76,10 @@
   .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
   .wageInp{width:110px;text-align:right;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);outline:none;font-size:14px}
   .wageInp:focus{border-color:var(--teal)}
+  .selInp{background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 6px;color:var(--ink);outline:none;font-size:14px}
+  .selInp:focus{border-color:var(--teal)}
+  .empSet{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fffefb}
+  .empSetName{font-size:13px;font-weight:800;margin-bottom:8px}
   details{margin-top:16px}
   summary{cursor:pointer;font-weight:800;font-size:14px;color:var(--tealDk);padding:6px 0;list-style:none;display:flex;align-items:center;gap:6px}
   summary::-webkit-details-marker{display:none}
@@ -149,12 +153,13 @@ function overlap(s1,e1,s2,e2){return Math.max(0,Math.min(e1,e2)-Math.max(s1,s2))
 /* ===== state ===== */
 const DKEY='payroll-data', CKEY='payroll-config';
 let data=null;            // {employees, records, settings}
-let cfg={wages:{},rates:{ot:0.25,night:0.25,holiday:0.35},nightStart:22,nightEnd:5,otThreshold:8,holidayWeekday:0,holidayDates:[]};
+let cfg={wages:{},transit:{},rates:{ot:0.25,night:0.25,holiday:0.35},nightStart:22,nightEnd:5,otThreshold:8,holidayWeekday:0,holidayDates:[]};
 let ui={month:thisMonth(),detail:null};
 
 function loadAll(){
   try{const c=localStorage.getItem(CKEY);if(c)cfg=Object.assign(cfg,JSON.parse(c));}catch(e){}
   if(!cfg.wages)cfg.wages={};
+  if(!cfg.transit)cfg.transit={};
   try{const d=localStorage.getItem(DKEY);if(d)data=JSON.parse(d);}catch(e){}
 }
 function saveCfg(){try{localStorage.setItem(CKEY,JSON.stringify(cfg));}catch(e){}}
@@ -204,6 +209,12 @@ function calcRecord(r){
   return {date:r.date,clockIn:r.inMs,clockOut:r.outMs,break:r.breakMs||0,worked,night,ot,holiday,edited:r.edited};
 }
 function wageOf(name){const w=cfg.wages[name];return (w==null||w==='')?0:Number(w);}
+/* 交通費：日額×出勤日数 ／ 月額（定額）を人ごとに選択 */
+function transitOf(name){const t=cfg.transit[name];
+  return {mode:(t&&t.mode)==='monthly'?'monthly':'daily', amount:(t&&Number(t.amount))||0};}
+function transitPay(name,days){const t=transitOf(name);
+  if(days<=0)return 0;
+  return t.mode==='monthly'?t.amount:t.amount*days;}
 /* CSVに登場する全氏名（月をまたいで収集） */
 function allNames(){
   const s=new Set();(data&&data.records||[]).forEach(r=>s.add(r.name));
@@ -232,7 +243,10 @@ function summarize(){
     const rate=wageOf(name);
     const pay=s.recs.reduce((a,c)=>a+payOf(c,rate),0);
     const base=rate*hrs(s.worked);
-    return {name,rate,days:s.days.size,worked:s.worked,night:s.night,ot:s.ot,holiday:s.holiday,base,extra:pay-base,total:pay,recs:s.recs};
+    const days=s.days.size;
+    const transit=transitPay(name,days);   // 交通費は割増の対象外（最後に加算）
+    return {name,rate,days,worked:s.worked,night:s.night,ot:s.ot,holiday:s.holiday,
+      base,extra:pay-base,wage:pay,transit,total:pay+transit,recs:s.recs};
   });
   return {rows,incomplete};
 }
@@ -387,8 +401,8 @@ function shiftMonth(n){const [y,m]=ui.month.split('-').map(Number);const d=new D
 
 function renderMain(){
   const {rows,incomplete}=summarize();
-  const tot=rows.reduce((a,r)=>({worked:a.worked+r.worked,ot:a.ot+r.ot,night:a.night+r.night,holiday:a.holiday+r.holiday,base:a.base+r.base,extra:a.extra+r.extra,total:a.total+r.total}),
-    {worked:0,ot:0,night:0,holiday:0,base:0,extra:0,total:0});
+  const tot=rows.reduce((a,r)=>({worked:a.worked+r.worked,ot:a.ot+r.ot,night:a.night+r.night,holiday:a.holiday+r.holiday,base:a.base+r.base,extra:a.extra+r.extra,transit:a.transit+r.transit,total:a.total+r.total}),
+    {worked:0,ot:0,night:0,holiday:0,base:0,extra:0,transit:0,total:0});
   view.innerHTML=`
     ${monthNav()}
     ${incomplete?`<div class="warnBox">${ic.warn}<div>退勤打刻が無い記録が ${incomplete} 件あります。この月の計算からは除外しています（打刻アプリ側で修正してください）。</div></div>`:''}
@@ -399,10 +413,10 @@ function renderMain(){
     <div class="tableWrap">
       <table>
         <thead><tr>
-          <th>氏名</th><th>時給</th><th>日数</th><th>実働</th><th>残業</th><th>深夜</th><th>休日</th><th>基本給</th><th>割増</th><th>総支給</th>
+          <th>氏名</th><th>時給</th><th>日数</th><th>実働</th><th>残業</th><th>深夜</th><th>休日</th><th>基本給</th><th>割増</th><th>交通費</th><th>総支給</th>
         </tr></thead>
         <tbody>
-        ${rows.length===0?`<tr><td colspan="10" class="muteRow">この月の記録はありません</td></tr>`:
+        ${rows.length===0?`<tr><td colspan="11" class="muteRow">この月の記録はありません</td></tr>`:
           rows.map(r=>`<tr class="clickRow" data-name="${esc(r.name)}">
             <td class="name">${esc(r.name)}</td>
             <td>${r.rate?yen(r.rate):'<span class="sub">未設定</span>'}</td>
@@ -413,17 +427,18 @@ function renderMain(){
             <td>${r.holiday?fmtHM(r.holiday):'–'}</td>
             <td>${yen(r.base)}</td>
             <td>${yen(r.extra)}</td>
+            <td>${r.transit?yen(r.transit):'–'}</td>
             <td class="yen">${yen(r.total)}</td>
           </tr>`).join('')}
         </tbody>
         ${rows.length?`<tfoot><tr>
           <td class="name">合計</td><td></td><td></td>
           <td>${fmtHM(tot.worked)}</td><td>${fmtHM(tot.ot)}</td><td>${fmtHM(tot.night)}</td><td>${fmtHM(tot.holiday)}</td>
-          <td>${yen(tot.base)}</td><td>${yen(tot.extra)}</td><td class="yen">${yen(tot.total)}</td>
+          <td>${yen(tot.base)}</td><td>${yen(tot.extra)}</td><td>${yen(tot.transit)}</td><td class="yen">${yen(tot.total)}</td>
         </tr></tfoot>`:''}
       </table>
     </div>
-    <div class="note">行をタップすると日別の内訳が表示されます。実働はCSVの「実働(時間)」をそのまま使用（＝退勤−出勤−休憩）。深夜時間は出勤・退勤の時刻から算出します。総支給＝基本給＋各割増で、社会保険・税の控除は含みません。</div>
+    <div class="note">行をタップすると日別の内訳が表示されます。実働はCSVの「実働(時間)」をそのまま使用（＝退勤−出勤−休憩）。深夜時間は出勤・退勤の時刻から算出します。総支給＝基本給＋各割増＋交通費で、社会保険・税の控除は含みません。</div>
 
     ${wagesPanel(rows)}
     ${settingsPanel()}
@@ -439,18 +454,32 @@ function renderMain(){
 
 function wagesPanel(rows){
   const names=allNames();
-  const thisMonthNames=new Set(rows.map(r=>r.name));
-  return `<details open><summary>${ic.tri}時給の設定（従業員ごと）</summary>
+  const byName={};rows.forEach(r=>byName[r.name]=r);
+  return `<details open><summary>${ic.tri}時給・交通費の設定（従業員ごと）</summary>
     <div class="panel box" style="margin-top:8px">
       <div class="grid2">
-        ${names.map(n=>`<div class="field">
-          <div>${esc(n)}${thisMonthNames.has(n)?'':' <span class="sub">(今月の記録なし)</span>'}</div>
-          <div class="row"><span class="sub">¥</span>
+        ${names.map(n=>{
+          const t=transitOf(n), r=byName[n];
+          return `<div class="empSet">
+          <div class="empSetName">${esc(n)}${r?'':' <span class="sub">(今月の記録なし)</span>'}</div>
+          <div class="row" style="margin-bottom:6px"><span class="sub" style="width:3.2em">時給</span><span class="sub">¥</span>
             <input class="wageInp wage" data-name="${esc(n)}" type="number" inputmode="numeric" min="0" step="10"
               value="${cfg.wages[n]??''}" placeholder="0"> <span class="sub">/時</span></div>
-        </div>`).join('')}
+          <div class="row"><span class="sub" style="width:3.2em">交通費</span>
+            <select class="selInp tmode" data-name="${esc(n)}">
+              <option value="daily"${t.mode==='daily'?' selected':''}>日額</option>
+              <option value="monthly"${t.mode==='monthly'?' selected':''}>月額</option>
+            </select>
+            <span class="sub">¥</span>
+            <input class="wageInp tamt" data-name="${esc(n)}" type="number" inputmode="numeric" min="0" step="10"
+              value="${t.amount||''}" placeholder="0" style="width:86px"></div>
+          ${t.amount?`<div class="sub" style="margin-top:5px">${t.mode==='monthly'
+              ?`月額 ${yen(t.amount)}（出勤があれば全額）`
+              :`${yen(t.amount)} × ${r?r.days+'日':'出勤日数'}${r?' = '+yen(r.transit):''}`}</div>`:''}
+        </div>`;}).join('')}
       </div>
-      <div class="note">入力すると自動保存され、次回もこの端末に残ります。時給は<b>氏名</b>で記憶されます（打刻アプリで改名すると再入力が必要です）。</div>
+      <div class="note">入力すると自動保存されます。<b>日額</b>は出勤日数を掛けて計算、<b>月額</b>は出勤が1日でもあれば全額を支給します。<br>
+      交通費は割増賃金の対象外のため、残業・深夜・休日の割増計算には含めず最後に加算しています。設定は<b>氏名</b>で記憶されます。</div>
     </div>
   </details>`;
 }
@@ -460,6 +489,11 @@ function bindWages(){
     if(v==='')delete cfg.wages[n];else cfg.wages[n]=Math.max(0,Number(v)||0);
     saveCfg();render();
   });
+  const setT=(n,patch)=>{const t=transitOf(n);cfg.transit[n]=Object.assign({},t,patch);
+    if(!cfg.transit[n].amount)delete cfg.transit[n];saveCfg();render();};
+  document.querySelectorAll('.tamt').forEach(inp=>inp.onchange=()=>{
+    const v=inp.value.trim();setT(inp.dataset.name,{amount:v===''?0:Math.max(0,Number(v)||0)});});
+  document.querySelectorAll('.tmode').forEach(sel=>sel.onchange=()=>setT(sel.dataset.name,{mode:sel.value}));
 }
 
 function settingsPanel(){
@@ -520,6 +554,7 @@ function openDetail(empId){
   ov.innerHTML=`<div class="modal">
     <div class="mh"><div class="mt">${esc(r.name)} ・ ${y}年${Number(m)}月</div><button class="x" id="cx">${ic.x}</button></div>
     <div class="sub" style="margin-bottom:12px">時給 ${r.rate?yen(r.rate):'未設定'} ・ ${r.days}日 ・ 実働 ${fmtHMjp(r.worked)} ・ 総支給 <b style="color:var(--tealDk)">${yen(r.total)}</b></div>
+    <div class="sub" style="margin-bottom:12px">賃金 ${yen(r.wage)}${r.transit?` ＋ 交通費 ${yen(r.transit)}（${transitOf(r.name).mode==='monthly'?'月額':`日額 ${yen(transitOf(r.name).amount)}×${r.days}日`}）`:''}</div>
     <div class="tableWrap"><table style="min-width:520px">
       <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>休憩</th><th>実働</th><th>残業</th><th>深夜</th><th>日給</th></tr></thead>
       <tbody>${recs.map(c=>{
@@ -532,7 +567,7 @@ function openDetail(empId){
           <td class="yen">${yen(payOf(c,r.rate))}</td>
         </tr>`;}).join('')}</tbody>
     </table></div>
-    <div class="note">日給＝時給×実働＋残業/深夜/休日の各割増。</div>
+    <div class="note">日給＝時給×実働＋残業/深夜/休日の各割増（交通費を除く）。交通費は上の合計に加算されています。</div>
   </div>`;
   ov.onclick=e=>{if(e.target===ov)document.body.removeChild(ov);};
   document.body.appendChild(ov);
@@ -541,10 +576,10 @@ function openDetail(empId){
 
 /* ===== CSV ===== */
 function exportCSV(rows,tot){
-  const head=['氏名','時給(円)','出勤日数','実働(時間)','残業(時間)','深夜(時間)','休日(時間)','基本給(円)','割増合計(円)','総支給額(円)'];
+  const head=['氏名','時給(円)','出勤日数','実働(時間)','残業(時間)','深夜(時間)','休日(時間)','基本給(円)','割増合計(円)','交通費(円)','総支給額(円)'];
   const h2=ms=>(ms/HOUR).toFixed(2);
-  const body=rows.map(r=>[r.name,Math.round(r.rate),r.days,h2(r.worked),h2(r.ot),h2(r.night),h2(r.holiday),Math.round(r.base),Math.round(r.extra),Math.round(r.total)]);
-  body.push(['合計','',rows.reduce((a,r)=>a+r.days,0),h2(tot.worked),h2(tot.ot),h2(tot.night),h2(tot.holiday),Math.round(tot.base),Math.round(tot.extra),Math.round(tot.total)]);
+  const body=rows.map(r=>[r.name,Math.round(r.rate),r.days,h2(r.worked),h2(r.ot),h2(r.night),h2(r.holiday),Math.round(r.base),Math.round(r.extra),Math.round(r.transit),Math.round(r.total)]);
+  body.push(['合計','',rows.reduce((a,r)=>a+r.days,0),h2(tot.worked),h2(tot.ot),h2(tot.night),h2(tot.holiday),Math.round(tot.base),Math.round(tot.extra),Math.round(tot.transit),Math.round(tot.total)]);
   const csv='﻿'+[head,...body].map(row=>row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   downloadBlob(csv,`給与_${ui.month}.csv`,'text/csv;charset=utf-8');
 }
